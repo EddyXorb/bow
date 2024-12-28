@@ -14,7 +14,7 @@ from analyzer import TransactionVisualizer
 import yaml
 import argparse
 
-parser = argparse.ArgumentParser("bow: booking organization flow")
+parser = argparse.ArgumentParser(description="Booking Organization Flow.")
 parser.add_argument("-f", "--folder", help="folder to work in", default=".")
 
 
