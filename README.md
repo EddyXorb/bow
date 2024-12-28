@@ -55,7 +55,20 @@ So if the program does not work as expected, try to solve the lowest number-step
 
 ## config.yml
 
-Contains general settings. So far, only a setting for the final plots is implemented, see [5_analysis](#5_analysis).
+Contains general settings, e.g. the plots can be configured (see [5_analysis](#5_analysis)) for that.
+Example: 
+
+```yml
+3_manual:
+  uncategorized_pattern: ".*unknown.*|.*unbekannt.*"
+5_analysis:
+  plots:
+    date_begin: 2020-01-01
+    date_end: 2100-01-01
+    account_pattern: ".*"
+```
+
+**uncategorized_pattern** : *string* that specifies, which categories should be seen as "uncategorized" somehow, which will then be treated as categories to manually specify. Be carefule with that, as **bow** will potentially remove all manually specified categories (see [3_manual](#3_manual)) that match this rule.
 
 ## 1_imports
 

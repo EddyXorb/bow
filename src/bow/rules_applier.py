@@ -32,7 +32,10 @@ class RulesApplier:
         """
         data_rest = data.clone()
         data_rest = data_rest.with_columns(
-            account1=pl.lit("account:") + pl.col("account"), account2=pl.lit("unknown")
+            account1=pl.lit("account:") + pl.col("account"),
+            account2=pl.when(pl.col("amount") > 0)
+            .then(pl.lit("incomes:unknown"))
+            .otherwise(pl.lit("expenses:unknown")),
         )
         new_data = []
         for rule in self.rules:
@@ -60,7 +63,6 @@ class RulesApplier:
                 # print(f"Rule '{rule}' matched {filtered.shape[0]} times")
 
         result = pl.concat(new_data + [data_rest])
-        # print(f"Data rest has {data_rest.shape[0]} rows.")
         return result
 
     def apply_legacy(self, data: pl.DataFrame) -> pl.DataFrame:

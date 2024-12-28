@@ -108,7 +108,7 @@ class Main:
         online_balances_file = self.working_dir / "1_imports" / "online_balances.csv"
         if not online_balances_file.exists():
             print(
-                "No online balances file found, skipping balance correction. Consider creating one."
+                f"No file {online_balances_file} found, skipping balance correction. Consider creating one."
             )
             return combined_transactions
 
@@ -172,8 +172,11 @@ class Main:
     def _3_manual(
         self,
         categorized_transactions: pl.DataFrame,
-        uncategorized_pattern: str = "unknown",
     ):
+        uncategorized_pattern = self.config.get("3_manual", {}).get(
+            "uncategorized_pattern", "unknown"
+        )
+
         print(
             f"Applying manual categories, uncategorized pattern: {uncategorized_pattern}"
         )
@@ -266,12 +269,11 @@ class Main:
         )
 
     def run(
-        self,
-        uncategorized_pattern: str = "unknown",
+        self
     ):
         imported = self._1_import()
         categorized = self._2_rules(imported)
-        manual = self._3_manual(categorized, uncategorized_pattern)
+        manual = self._3_manual(categorized)
 
         self._4_output(manual)
         self._5_analyze(manual)
