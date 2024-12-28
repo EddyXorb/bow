@@ -228,7 +228,7 @@ class Main:
         )
 
         new_man_data = pl.concat([man_categorized, filtered]).sort(
-            "date", descending=True
+            ["date", "account", "amount"], descending=True
         )
         new_man_data.write_csv(
             self.working_dir / "3_manual" / manual_category_file_name
@@ -268,9 +268,7 @@ class Main:
             self.working_dir / "5_analysis"
         )
 
-    def run(
-        self
-    ):
+    def run(self):
         imported = self._1_import()
         categorized = self._2_rules(imported)
         manual = self._3_manual(categorized)
