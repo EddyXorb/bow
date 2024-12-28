@@ -2,47 +2,46 @@
 
 Bookings are meant to be bank transactions.
 
-## Purpose 
+## Purpose
 
 The general purpose is to get a better overview of your bank transactions for people who like
-[plain text accounting](https://plaintextaccounting.org/). If you normally enter all your bank transactions into an excel table
-to categorize them by hand, this framework may help to reduce the categorization work using automatic rules.
+[plain text accounting](https://plaintextaccounting.org/). If you normally enter all your bank transactions into an excel table to categorize them by hand, this framework may help to reduce the categorization work using automatic rules.
 
 ## Working directory
 
 You need a directory (e.g. "banking") that you pass to **bow**.
 This will be the working directory of **bow**. It is structured as follows:
 
-- banking
+- banking 
   - config.yml
-  - 1_imports
+  - 1_imports 
     - online_balances.csv
-    - bank
-      - bank1
+    - bank 
+      - bank1 
         - parser_config.yml
         - transaktions bank 1.csv
         - transaktinos bank 1 (part 2).csv
         - ...
-      - bank2
+      - bank2 
         - parser_config.yml
         - transaktions bank 2.csv
         - ...
       - ...
-      - bankN
+      - bankN 
         - parser_config.yaml
         - transaktions bank N.csv
         - ...
-    - amazon
+    - amazon 
       - order infos.csv -> *you will get these from amazon when you ask for your data; it takes a couple of days*
-  - 2_rules
+  - 2_rules 
     - income.yml
     - expenses.yml
     - ...
-  - 3_manual
+  - 3_manual 
     - manual_categories.csv
-  - 4_output
+  - 4_output 
     - output.csv
-  - 5_analysis
+  - 5_analysis 
     - plot 1.html
     - plot 2.html
     - ...
@@ -56,7 +55,7 @@ So if the program does not work as expected, try to solve the lowest number-step
 ## config.yml
 
 Contains general settings, e.g. the plots can be configured (see [5_analysis](#5_analysis)) for that.
-Example: 
+Example:
 
 ```yml
 3_manual:
@@ -77,7 +76,7 @@ There are two folders herein:
 - **bank**
 - **amazon** [optional]
 
-**bank** contains all bank-accounts. 
+**bank** contains all bank-accounts.
 You can add your downloaded bank-account-csv's in subfolders of this.
 It is not a problem to have overlapping timeframes of these csv's, as long as they contain the same transactions.
 **bow** will take care to not import two times the same transactions.
@@ -155,8 +154,8 @@ Basically, **read_csv** is the direct input to [polars.read_csv](https://docs.po
 Any optional entity not specified will be `null`.
 
 **pre_rename** takes place before rename and is optional with the following optional entries:
-  lower_columns: *bool* if true, will convert every column to lower case
-  strip_spaces: *bool* if true, will remove every space in every column (also within the column)
+lower_columns: *bool* if true, will convert every column to lower case
+strip_spaces: *bool* if true, will remove every space in every column (also within the column)
 
 **date_format** : *string* specify your date-format column using the [standard python syntax](https://docs.python.org/3/library/datetime.html#format-codes).
 
@@ -179,7 +178,7 @@ Any optional entity not specified will be `null`.
 
 ### Special folder **amazon**
 
-The optional folder **amazon** contains transaction data from amazon. **bow** will try to add the product name to every transaction in the **bank**-accounts. 
+The optional folder **amazon** contains transaction data from amazon. **bow** will try to add the product name to every transaction in the **bank**-accounts.
 The parser_config.yml for this folder (at the moment) looks as follows:
 
 ```yml
@@ -238,7 +237,7 @@ balance based on the given import-csv's.
 Having to deal with many transactions, one wants to categorize every one of it in order to get insights for what one spends money (or receives it).
 Rules help to automatically categorize transactions.
 It is common in plain text accounting software to name the category column "account2" (see [hledger](https://hledger.org/)).
-Therefore this step will add two columns "account1" and "acccount2", where "account1" is basically the "account" of the row, only prepended by "account:", and 
+Therefore this step will add two columns "account1" and "acccount2", where "account1" is basically the "account" of the row, only prepended by "account:", and
 "account2" represents the target where the money of account1 goes to or comes from (which can be interpreted as a **category**).
 
 The folder **2_rules** contains arbitrarily named (only the ending has to be .yml) rules-yml-files such as:
@@ -302,19 +301,7 @@ uncategorized transactions after the rules have been applied.
 ## 4_output
 
 Will write the combined and cleaned transactions to a file *output.csv*.
- 
-These can be easily read by other plain-text-accounting software such as hledger. For that to work, create a `output.csv.rules` such as
 
-```python
-# skip the headings line:
-skip 1
-
-# use the first three CSV fields for hledger's transaction date, description and amount:
-fields date,,,description,,,amount,account1,account2
-
-# since the CSV amounts have no currency symbol, add one:
-currency €
-```
 
 ## 5_analysis
 
@@ -329,3 +316,41 @@ this:
     date_end: 2023-01-01
     account_pattern: ".*DKB.*"
 ```
+
+### Hledger
+
+The `output.csv` can be easily read by other plain-text-accounting software such as hledger. For that to work, create a `output.csv.rules` in *4_output* such as
+
+```python
+# skip the headings line:
+skip 1
+
+# use the first three CSV fields for hledger's transaction date, description and amount:
+fields date,,,description,,,amount,account1,account2
+
+# since the CSV amounts have no currency symbol, add one:
+currency €
+```
+
+In order to create a hledger-journal directly in the *5_analysis*-folder, call 
+
+```bash
+hledger import -f .journal ../4_output/output.csv
+```
+
+from there. You can also create a file `hledger.conf` with
+
+```bash
+-f .journal
+```
+
+to avoid having to retype -f .journal all the time.
+With a `hledger.directives`-file such as
+
+```bash
+account account         ; type: A
+account ausgaben        ; type: L
+account equity          ; type: E
+account einnahmen       ; type: R
+```
+you can associate your manual-created categories to hledgers "assets","liabilities", "expenses" etc categories.
