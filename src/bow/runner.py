@@ -74,7 +74,7 @@ class Main:
         amazon_all = (
             ConfigFileBasedParser(folder=self.working_dir / "1_imports" / "amazon")
             .parse()
-            .group_by("amazon_order_id", "amazon_asin")
+            .group_by("amazon_order_id")
             .first()
         )
 
@@ -98,7 +98,6 @@ class Main:
         ).drop(
             "desc_order",
             "account_right",
-            "amazon_asin",
             "amazon_order_id",
             "date_right",
         )
