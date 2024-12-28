@@ -145,6 +145,8 @@ Any optional entity not specified will be `null`.
   lower_columns: *bool* if true, will convert every column to lower case
   strip_spaces: *bool* if true, will remove every space in every column (also within the column)
 
+**date_format** : *string* specify your date-format column using the [standard python syntax](https://docs.python.org/3/library/datetime.html#format-codes).
+
 **account_settings** is optional containing the following optional entries ( Will be applied in the end, after every other parser steps are done):
 
 - account_aliases : *dict[str,str]* with names every entry in the account column should be replaced with. If a name is not in this dict, will not change the row.
@@ -156,6 +158,11 @@ Any optional entity not specified will be `null`.
 - partner_column_if_amount_negative: *string* pointing to the column which represents the "partner"-entity when the amount is less than 0.
 - partner_column_if_amount_positive: *string* same as above, inverted.
 - use_other_column_if_partner_empty: *bool* if **true** and one of the two partner_columns above is null, will take the other one, indipendently from the amount.
+
+**row_filter**: optional restriction of rows with the following entries:
+
+- date_begin: *date* of the first transaction included
+- date_end: *date* of the first transaction not included
 
 ### Special folder **amazon**
 
