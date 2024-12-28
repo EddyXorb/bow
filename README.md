@@ -2,6 +2,14 @@
 
 Bookings are meant to be bank transactions.
 
+## Purpose 
+
+The general purpose is to get a better overview of your bank transactions for people who like
+[plain text accounting](https://plaintextaccounting.org/). If you normally enter all your bank transactions into an excel table
+to categorize them by hand, this framework may help to reduce the categorization work using automatic rules.
+
+## Working directory
+
 You need a directory (e.g. "banking") that you pass to **bow**.
 This will be the working directory of **bow**. It is structured as follows:
 
