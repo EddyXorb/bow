@@ -1,0 +1,24 @@
+datum,konto,gegenstelle,zweck,kategorie,iban_gegenstelle,betrag
+2001-11-30,konto2,Eröffnungssaldo,,Einnahmen:Sparbüchse,,88.89
+2001-12-21,konto2,RECHNUNGSABSCHLUSS,HABENZINSEN ABRECHNUNG 061101 - 201201 ABSCHLUßSALDO *,Einnahmen:Zinseinkünfte,,0.86
+2001-12-31,konto2,Ausgleichsbuchung,Ausgleichsbuchung nach Online-Abgleich,,,-0.42
+2002-01-04,konto2,Eddy Xorb,Einzahlung Geburtstagsgeld,Einnahmen:Geschenk,,12.27
+2002-03-07,konto2,Eddy Xorb,Taschengeld,Einnahmen:Taschengeld,,13.5
+2002-03-21,konto2,RECHNUNGSABSCHLUSS,HABENZINSEN ABRECHNUNG  211201 - 200302,Einnahmen:Zinseinkünfte,,1.01
+2002-04-03,konto2,Eddy Xorb,TASCHENGELD,Einnahmen:Taschengeld,,13.5
+2002-05-02,konto2,SPARKASSE SPREE-NEISSE,PREIS FUER HBCI-KARTE 2002,Gebühren:Bankgebühren,,-3.75
+2002-05-06,konto2,Eddy Xorb,TASCHENGELD                -5  GESCHENK PAPPA,Einnahmen:Taschengeld,,8.5
+2002-05-07,konto2,Eddy Xorb,EINZAHLUNG HBCI-KARTE,Gebühren:Bankgebühren,,3.75
+2002-06-21,konto2,RECHNUNGSABSCHLUSS,HABENZINSEN ABRECHNUNG  210302 - 200602,Einnahmen:Zinseinkünfte,,1.29
+2002-07-03,konto2,Eddy Xorb,TASCHENGELD,Einnahmen:Taschengeld,,13.5
+2002-08-01,konto2,Friends (allgemein),Abzahlung Flossen 7€ Teilabzahlung ital. Münzen,Anschaffung,,-13.5
+2002-08-01,konto2,Eddy Xorb,Taschengeld,Einnahmen:Taschengeld,,13.5
+2002-08-13,konto2,Friends (allgemein),Restzahlung ital. Muenzen,Anschaffung,,-26.82
+2002-09-01,konto2,Eddy Xorb,Taschengeld,Einnahmen:Taschengeld,,8.55
+2002-09-05,konto2,Friends (allgemein),Barauszahlung des Taschengeldes,Ausgelegt,,-8.55
+2002-09-21,konto2,Rechnungsabschluss,Habenzinsen             Abrechnung 21062002 - 20092002,Einnahmen:Zinseinkünfte,,1.39
+2002-10-01,konto2,Eddy Xorb,Taschengeld,Einnahmen:Taschengeld,,13.5
+2002-11-05,konto2,Eddy Xorb,TASCHENGELD,Einnahmen:Taschengeld,,9.55
+2002-12-06,konto2,Eddy Xorb,TASCHENGELD,Einnahmen:Taschengeld,,13.5
+2002-12-23,konto2,RECHNUNGSABSCHLUSS,HABENZINSEN ABRECHNUNG  210902 - 201202,Einnahmen:Zinseinkünfte,,1.48
+2003-01-03,konto2,Eddy Xorb,TASCHENGELD,Einnahmen:Taschengeld,,13.5

@@ -1,0 +1,28 @@
+[project]
+name = "bow"
+version = "0.1.0"
+description = "Organize your account transactions"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "altair>=5.5.0",
+    "hatchling>=1.27.0",
+    "ipykernel>=6.29.5",
+    "pandas>=2.2.3",
+    "polars>=1.17.1",
+    "pyarrow>=18.1.0",
+    "pytest>=8.3.4",
+    "pyyaml>=6.0.2",
+    "vegafusion[embed]>=2.0.1",
+    "vl-convert-python>=1.7.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[project.scripts]
+bow = "src.bow.runner:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
