@@ -224,11 +224,11 @@ class Main:
             how="anti",
         )
 
-        new_todo_df.sort(["date", "account", "amount"], descending=True).write_csv(
+        new_todo_df.sort(bank_transaction_columns_categorized, descending=True).write_csv(
             todo_file
         )
 
-        new_done_df.sort(["date", "account", "amount"], descending=True).write_csv(
+        new_done_df.sort(bank_transaction_columns_categorized, descending=True).write_csv(
             done_file
         )
 
