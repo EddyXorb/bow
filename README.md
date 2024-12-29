@@ -290,13 +290,14 @@ All fields specified will be connected with **AND**, such that if any field give
 
 ## 3_manual
 
-Contains a file *manual_categories.csv*. It is automatically created, if not present, and contains all transactions with unknown categorization.
-Sometimes, you have to categorize by hand, because it would be to cumbersome to create new rules for every single-type-transaction.
-In order to make this easy, this file's "account2" column (which is the categorization column) can be manipulated.
-Every category not containing "unknown" in its name, will then by taken as a user-defined categorization and will overwrite any rule-based categorization.
+Contains two files `todo.csv` and `done.csv`. They are automatically created, if not present.
+`todo.csv` contains all transactions with unknown categorizatio, wheras `done.csv` those manually categorized.
 
-If you change your rules and there are less *unknown*-categories, the `manual_categories`.csv will be updated to contain only the user-defined categories and the new
-uncategorized transactions after the rules have been applied.
+Sometimes, you have to categorize by hand, because it would be to cumbersome to create new rules for every single-type-transaction.
+In order to make this easy, the `todo.csv`'s "account2" column (which is the categorization column) can be manipulated.
+Every category not containing "unknown" (or a pattern that can be specified in [config.yml](#configyml)) in its name, will then by taken as a user-defined categorization and will overwrite any rule-based categorization.
+
+If you change your rules and there are less *unknown*-categories, the `todo.csv` will be updated to contain only the user-defined categories and the new uncategorized transactions after the rules have been applied.
 
 ## 4_output
 

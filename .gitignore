@@ -1,6 +1,6 @@
 *__pycache__*
-.venv
-.vscode
+.venv*
+.vscode*
 *.html
 .python-version
 *test_wd*

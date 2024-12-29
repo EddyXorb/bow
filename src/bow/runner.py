@@ -5,7 +5,11 @@ import sys
 
 sys.path.append(str(Path(__file__).parent.absolute()))
 
-from parser import ConfigFileBasedParser
+from parser import (
+    ConfigFileBasedParser,
+    bank_transaction_columns_categorized,
+    bank_transaction_data_schema,
+)
 import polars as pl
 from rules_applier import RulesApplier
 from rules_parser import RulesParser
@@ -169,10 +173,7 @@ class Main:
         )
         return categorized_transactions
 
-    def _3_manual(
-        self,
-        categorized_transactions: pl.DataFrame,
-    ):
+    def _3_manual(self, categorized_transactions: pl.DataFrame):
         uncategorized_pattern = self.config.get("3_manual", {}).get(
             "uncategorized_pattern", "unknown"
         )
@@ -180,63 +181,60 @@ class Main:
         print(
             f"Applying manual categories, uncategorized pattern: {uncategorized_pattern}"
         )
-        manual_category_file_name = "manual_categories.csv"
+        todo_file = self.working_dir / "3_manual" / "todo.csv"
+        done_file = self.working_dir / "3_manual" / "done.csv"
 
-        if len(list((self.working_dir / "3_manual").glob("*.csv"))) == 0:
-            man_categorized = categorized_transactions.filter(
+        if not todo_file.exists():
+            todo_df = categorized_transactions.filter(
                 pl.col("account2").str.contains(uncategorized_pattern)
             )
-            man_categorized.write_csv(
-                self.working_dir / "3_manual" / manual_category_file_name
+            todo_df.write_csv(todo_file)
+        else:
+            todo_df = pl.read_csv(
+                todo_file,
+                try_parse_dates=True,
+                schema_overrides=bank_transaction_data_schema,
             )
-            return categorized_transactions
 
-        join_cols = [
-            "date",
-            "account",
-            "partner",
-            "desc",
-            "classification",
-            "partner_iban",
-            "amount",
-            "account1",
-        ]
+        if not done_file.exists():
+            done_df = todo_df[:0]
+            done_df.write_csv(done_file)
+        else:
+            done_df = pl.read_csv(
+                done_file,
+                try_parse_dates=True,
+                schema_overrides=bank_transaction_data_schema,
+            )
 
-        man_categorized = pl.read_csv(
-            self.working_dir / "3_manual" / manual_category_file_name,
-            try_parse_dates=True,
-            schema_overrides={
-                "amount": pl.Float64,
-                "date": pl.Date,
-                "account": pl.String,
-                "partner": pl.String,
-                "desc": pl.String,
-                "classification": pl.String,
-                "partner_iban": pl.String,
-                "account1": pl.String,
-                "account2": pl.String,
-            },
-        ).filter(~pl.col("account2").str.contains(uncategorized_pattern))
+        join_cols = bank_transaction_columns_categorized
+        join_cols.remove("account2")
 
-        filtered = categorized_transactions.filter(
+        todo_done_together = pl.concat([todo_df, done_df])
+
+        new_done_df = todo_done_together.filter(
+            ~pl.col("account2").str.contains(uncategorized_pattern)
+        )
+
+        new_todo_df = categorized_transactions.filter(
             pl.col("account2").str.contains(uncategorized_pattern)
         ).join(
-            man_categorized,
+            new_done_df,
             on=join_cols,
             join_nulls=True,
             how="anti",
         )
 
-        new_man_data = pl.concat([man_categorized, filtered]).sort(
-            ["date", "account", "amount"], descending=True
+        new_todo_df.sort(["date", "account", "amount"], descending=True).write_csv(
+            todo_file
         )
-        new_man_data.write_csv(
-            self.working_dir / "3_manual" / manual_category_file_name
+
+        new_done_df.sort(["date", "account", "amount"], descending=True).write_csv(
+            done_file
         )
 
         enriched_transactions = (
             categorized_transactions.join(
-                man_categorized, on=join_cols, how="left", join_nulls=True
+                new_done_df, on=join_cols, how="left", join_nulls=True
             )
             .with_columns(
                 account2=pl.when(pl.col("account2_right").is_not_null())
@@ -252,18 +250,10 @@ class Main:
         print("Writing output..")
         enriched_transactions.write_csv(self.working_dir / "4_output" / "output.csv")
 
-        # hledger_output_columns = ["date", "desc", "amount", "account1", "account2"]
-        # hledger_compatible_transactions = enriched_transactions.select(
-        #     hledger_output_columns
-        # )
-        # hledger_compatible_transactions.write_csv(
-        #     self.working_dir / "4_output" / "hledger/imported_hledger.csv"
-        # )
-
     def _5_analyze(self, enriched_transactions: pl.DataFrame):
         print("Analyzing transactions..")
         plots_config = self.config.get("5_analysis", {}).get("plots", {})
-        # print(f"Using plots config: {plots_config}")
+
         TransactionVisualizer(enriched_transactions, **plots_config).run(
             self.working_dir / "5_analysis"
         )

@@ -15,6 +15,23 @@ bank_transaction_columns = [
     "amount",
 ]
 
+bank_transaction_columns_categorized = bank_transaction_columns + [
+    "account1",
+    "account2",
+]
+
+bank_transaction_data_schema = {
+    "date": pl.Date,
+    "account": pl.String,
+    "partner": pl.String,
+    "desc": pl.String,
+    "classification": pl.String,
+    "partner_iban": pl.String,
+    "amount": pl.Float64,
+    "account1": pl.String,
+    "account2": pl.String,
+}
+
 
 class Parser:
     def __init__(
