@@ -276,6 +276,7 @@ In general, everything in a rule file has to be interpreted as regex, except the
 | entity         | description                                                                                                           | example                                           | optional |
 | -------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- | -------- |
 | category       | category that will be fiven to every transaction matching this rule                                                   | expenses:bank                                     | No       |
+| case_sensitive | if false, ignores case in the following regexes, which is the default                                                 | false                                             | Yes      |
 | date_begin     | The earliest date of the transaction                                                                                  | 2022-01-01                                        | Yes      |
 | date_end       | The latest date of the transaction  (less than this date)                                                             | 2023-01-01                                        | Yes      |
 | amount         | regex restricting amount of money involved in the transaction (useful to restrict to negative or big/small values)    | "^[-].*"                                          | Yes      |
