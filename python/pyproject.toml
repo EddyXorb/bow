@@ -2,7 +2,7 @@
 name = "bow"
 version = "0.1.0"
 description = "Organize your account transactions"
-readme = "README.md"
+readme = "../README.md"
 requires-python = ">=3.12"
 dependencies = [
     "altair>=5.5.0",

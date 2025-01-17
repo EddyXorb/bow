@@ -1,0 +1,6 @@
+test_wd*
+target*
+# Rust specific
+*.rs.bk
+*.d
+*.rlib
