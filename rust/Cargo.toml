@@ -7,3 +7,4 @@ edition = "2021"
 clap = { version = "4.0", features = ["derive"] }
 polars = { version = "0.45.1", features = ["lazy"] }
 serde_yaml = "0.9.34"
+walkdir = "2.3.2"
