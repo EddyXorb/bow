@@ -1,16 +1,26 @@
 use crate::util::read_yaml_file;
-use crate::EXPECTED_BOW_FOLDERS;
+use log::{info, warn};
+use polars::error::{PolarsError, PolarsResult};
 use polars::frame::DataFrame;
-use polars::prelude::{CsvParseOptions, CsvReadOptions, CsvReader, SerReader};
+use polars::prelude::{
+    CsvParseOptions, CsvReadOptions, CsvReader, Literal, NullValues, PlSmallStr, SerReader,
+    StringMethods,
+};
+use serde_yml::Number;
 use std::collections::HashMap;
+use std::fs::read;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use walkdir::WalkDir;
 
+use polars::prelude::*;
+
 const PARSER_CONFIG_FILE_NAME: &str = "parser_config.yml";
+const EXPECTED_BOW_COLUMNS: [&str; 5] = ["date", "amount", "partner", "account", "partner_iban"];
 
 pub struct BowParser<'a> {
     folder: &'a Path,
-    parse_config: HashMap<String, serde_yaml::Value>,
+    parse_config: HashMap<String, serde_yml::Value>,
     expected_out_columns: [&'static str; 5],
     banking_input_csvs: Vec<PathBuf>,
 }
@@ -26,14 +36,14 @@ impl<'a> BowParser<'a> {
             .map(|x| x.unwrap().into_path())
             .filter(|x| x.is_file() && x.extension().is_some() && x.extension().unwrap() == "csv")
         {
-            print!("parser checks {:?}", entry);
+            info!("parser checks {:?}", entry);
             let parent_folder = entry
                 .parent()
                 .and_then(|p| p.file_name())
                 .and_then(|f| f.to_str())
                 .unwrap_or("unknown");
 
-            println!(
+            info!(
                 "Found banking csv '{}' in folder '{}'",
                 entry.file_name().unwrap().to_str().unwrap(),
                 parent_folder,
@@ -49,30 +59,134 @@ impl<'a> BowParser<'a> {
         }
     }
 
-    pub fn parse(&self) -> Option<DataFrame> {
+    pub fn parse(&self) -> Result<DataFrame, PolarsError> {
         for csv in &self.banking_input_csvs {
-            let df: DataFrame = CsvReadOptions::default()
-                .with_skip_rows(
-                    self.parse_config
-                        .get("read_csv")
-                        .unwrap()
-                        .get("skip_rows")
-                        .unwrap()
-                        .as_i64()
-                        .unwrap_or(0) as usize,
-                )
-                .with_parse_options(CsvParseOptions::default().with_separator(b';'))
-                .try_into_reader_with_file_path(Some(csv.clone()))
-                .unwrap()
-                .finish()
-                .unwrap();
-            // let df = CsvReader::new(file.unwrap()).finish().unwrap();
+            let read_options = self.get_csv_read_options();
+            let mut df: DataFrame = read_options
+                .try_into_reader_with_file_path(Some(csv.clone()))?
+                .finish()?;
+
+            df = self.rename_df(df, &csv)?;
+            df = self.convert_date_column(df, &csv)?;
+            df = self.apply_account_settings(df, &csv)?;
+
             print!("{:?}", df);
         }
-        None
+
+        // partner_settings:
+        //   partner_column_if_amount_negative: "Zahlungsempfänger*in"
+        //   partner_column_if_amount_positive: "Zahlungspflichtige*r"
+        // row_filter:
+        //   date_begin: 2022-01-01
+        DataFrame::new(vec![])
+    }
+
+    fn apply_account_settings(
+        &self,
+        mut df: DataFrame,
+        csv: &Path,
+    ) -> Result<DataFrame, PolarsError> {
+        if let Some(account_settings) = self.parse_config.get("account_settings") {
+            if let Some(account_name) = account_settings.get("account_name") {
+                df = df
+                    .lazy()
+                    .with_column(lit(account_name.as_str().unwrap()).alias("account"))
+                    .collect()?;
+            } else if account_settings
+                .get("account_name_is_file_name")
+                .and_then(|x| x.as_bool())
+                .unwrap_or(false)
+            {
+                df = df
+                    .lazy()
+                    .with_column(lit(csv.file_stem().unwrap().to_str().unwrap()).alias("account"))
+                    .collect()?;
+            }
+
+            if let Some(account_aliases) = account_settings.get("account_aliases") {
+                for (pat, value) in account_aliases
+                    .as_mapping()
+                    .unwrap()
+                    .into_iter()
+                    .map(|(k, v)| (k.as_str().unwrap(), v.as_str().unwrap()))
+                {
+                    df = df
+                        .lazy()
+                        .with_column(col("account").str().replace(lit(pat), lit(value), false))
+                        .collect()?;
+                }
+            }
+        }
+        Ok(df)
+    }
+
+    fn convert_date_column(&self, mut df: DataFrame, csv: &Path) -> Result<DataFrame, PolarsError> {
+        let date_format = self.parse_config.get("date_format");
+        df.with_column(
+            df.column("date")?
+                .str()?
+                .as_date(date_format.and_then(|x| x.as_str()), false)
+                .expect(format!("Error parsing date of {csv:?}").as_str()),
+        )?;
+        Ok(df)
+    }
+
+    fn rename_df(&self, mut df: DataFrame, csv: &Path) -> PolarsResult<DataFrame> {
+        if let Some(rename) = self.parse_config.get("rename") {
+            let rename_dict: HashMap<&str, &str> = rename
+                .as_mapping()
+                .unwrap()
+                .iter()
+                .map(|(key, value)| (value.as_str().unwrap(), key.as_str().unwrap()))
+                .collect();
+
+            for (key, value) in rename_dict {
+                if let Err(e) = df.rename(key, value.into()) {
+                    warn!(
+                        "The column '{key}' of {csv:?} could not be renamed to '{value}'. Error: {e}"
+                    );
+                }
+            }
+        }
+        Ok(df)
+    }
+
+    fn get_csv_read_options(&self) -> CsvReadOptions {
+        let mut parse_options = CsvParseOptions::default();
+        let mut read_options = CsvReadOptions::default();
+
+        if let Some(read_csv) = self.parse_config.get("read_csv") {
+            if let Some(separator_value) = read_csv.get("separator").and_then(|x| x.as_str()) {
+                parse_options.separator = separator_value.chars().next().unwrap() as u8;
+            }
+            if let Some(decimal_comma_value) =
+                read_csv.get("decimal_comma").and_then(|x| x.as_bool())
+            {
+                parse_options.decimal_comma = decimal_comma_value;
+            }
+            if let Some(null_values_value) =
+                read_csv.get("null_values").and_then(|x| x.as_sequence())
+            {
+                parse_options.null_values = Some(NullValues::AllColumns(
+                    null_values_value
+                        .iter()
+                        .map(|x| PlSmallStr::from_str(x.as_str().unwrap()))
+                        .collect(),
+                ));
+            }
+            if let Some(try_parse_dates) = read_csv.get("try_parse_dates").and_then(|x| x.as_bool())
+            {
+                parse_options.try_parse_dates = try_parse_dates;
+            }
+
+            if let Some(skip_rows_value) = read_csv.get("skip_rows").and_then(|x| x.as_i64()) {
+                read_options.skip_rows = skip_rows_value as usize;
+            }
+            read_options.parse_options = Arc::new(parse_options);
+        }
+        read_options
     }
 }
-
 // class Parser:
 //     def __init__(
 //         self,

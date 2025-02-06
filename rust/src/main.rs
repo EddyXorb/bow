@@ -3,11 +3,13 @@ mod util;
 
 // src/main.rs
 use clap::Parser;
+use flexi_logger;
+use log::{debug, error, info, Record};
 use std::collections::HashMap;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::io::Write;
+use std::path::{absolute, PathBuf};
 use util::read_yaml_file;
-use walkdir::WalkDir;
 /// Search for a pattern in a file and display the lines that contain it.
 #[derive(Parser)]
 struct Cli {
@@ -30,12 +32,28 @@ const CONFIG_FILE_NAME: &str = "config.yml";
 // inlay - hints: press CTRL + ALT
 struct Main {
     working_dir: PathBuf,
-    config: HashMap<String, serde_yaml::Value>,
+    config: HashMap<String, serde_yml::Value>,
     config_file: PathBuf,
 }
 
+fn file_log_format(
+    write: &mut dyn Write,
+    now: &mut flexi_logger::DeferredNow,
+    record: &Record,
+) -> std::io::Result<()> {
+    write!(
+        write,
+        "{} [{}] - {}",
+        now.format("%Y-%m-%d %H:%M:%S"),
+        record.level(),
+        &record.args()
+    )
+}
+
 impl Main {
-    fn new(working_dir: PathBuf) -> Self {
+    fn new(working_dir: PathBuf) -> Result<Self, flexi_logger::FlexiLoggerError> {
+        init_logging(&working_dir)?;
+
         let config_file = working_dir.as_path().join(CONFIG_FILE_NAME);
         let config = read_yaml_file(&config_file);
 
@@ -45,30 +63,48 @@ impl Main {
             ));
         }
 
-        Main {
+        Ok(Main {
             working_dir,
             config: config.unwrap_or(HashMap::new()),
             config_file,
-        }
+        })
     }
 
     fn run_1_import(&self) {
-        for bankfolder in WalkDir::new(self.working_dir.join(EXPECTED_BOW_FOLDERS[1])).min_depth(1)
-            .max_depth(1)
+        for bankfolder in std::fs::read_dir(self.working_dir.join(EXPECTED_BOW_FOLDERS[1]))
+            .expect(
+                "There should be a directory {EXPECTED_BOW_FOLDERS[1]} in the working directory.",
+            )
             .into_iter()
             .filter(|x| x.is_ok())
-            .map(|x| x.unwrap().into_path())
-            .filter(|x| x.is_dir())
+            .map(|x| x.unwrap().path())
         {
-            print!("{:?}", bankfolder);
+            info!("{:?}", bankfolder);
             let parser = parser::BowParser::new(&bankfolder);
             parser.parse();
         }
     }
 }
 
+fn init_logging(working_dir: &PathBuf) -> Result<(), flexi_logger::FlexiLoggerError> {
+    flexi_logger::Logger::try_with_str("info")?
+        .log_to_file(
+            flexi_logger::FileSpec::default()
+                .directory(working_dir)
+                .suppress_timestamp(),
+        )
+        .duplicate_to_stdout(flexi_logger::Duplicate::Info)
+        .print_message()
+        .append()
+        .format_for_files(file_log_format)
+        .format_for_stdout(flexi_logger::colored_default_format)
+        .start()?;
+    info!("Initialized logging of BOW.");
+    Ok(())
+}
+
 fn main() {
     let args = Cli::parse();
-    let _main = Main::new(args.path);
+    let _main = Main::new(args.path).unwrap();
     _main.run_1_import();
 }

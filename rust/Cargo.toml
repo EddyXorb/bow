@@ -5,6 +5,14 @@ edition = "2021"
 
 [dependencies]
 clap = { version = "4.0", features = ["derive"] }
-polars = { version = "0.45.1", features = ["lazy"] }
-serde_yaml = "0.9.34"
+polars = { version = "0.46.0", features = [
+    "lazy",
+    "serde",
+    "strings",
+    "regex",
+] }
+serde = "1.0.217"
+serde_yml = "0.0.12"
 walkdir = "2.3.2"
+flexi_logger = "0.29"
+log = "0.4"
