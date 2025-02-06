@@ -81,7 +81,11 @@ impl Main {
         {
             info!("{:?}", bankfolder);
             let parser = parser::BowParser::new(&bankfolder);
-            parser.parse();
+            match parser.parse()
+            {
+                Ok(_) => info!("Parsing successful"),
+                Err(e) => error!("Parsing failed: {e}"),
+            }
         }
     }
 }

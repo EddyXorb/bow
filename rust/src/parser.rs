@@ -67,15 +67,16 @@ impl<'a> BowParser<'a> {
                 .finish()?;
 
             df = self.rename_df(df, &csv)?;
+            df = self.convert_amount(df)?;
             df = self.convert_date_column(df, &csv)?;
             df = self.apply_account_settings(df, &csv)?;
+            df = self.apply_partner_settings(df)?;
 
-            print!("{:?}", df);
+            df = df.select(self.expected_out_columns)?;
+
+            info!("{csv:?}\n: {:?}", df);
         }
 
-        // partner_settings:
-        //   partner_column_if_amount_negative: "Zahlungsempfänger*in"
-        //   partner_column_if_amount_positive: "Zahlungspflichtige*r"
         // row_filter:
         //   date_begin: 2022-01-01
         DataFrame::new(vec![])
@@ -148,6 +149,7 @@ impl<'a> BowParser<'a> {
                 }
             }
         }
+
         Ok(df)
     }
 
@@ -185,6 +187,57 @@ impl<'a> BowParser<'a> {
             read_options.parse_options = Arc::new(parse_options);
         }
         read_options
+    }
+
+    fn apply_partner_settings(&self, mut df: DataFrame) -> Result<DataFrame, PolarsError> {
+        if let Some(partner_columns) = self
+            .parse_config
+            .get("partner_settings")
+            .and_then(|x| {
+                x.get("partner_column_if_amount_negative")
+                    .zip(x.get("partner_column_if_amount_positive"))
+            })
+            .map(|x| (x.0.as_str().unwrap(), x.1.as_str().unwrap()))
+        {
+            let (neg, pos) = partner_columns;
+
+            df = df
+                .lazy()
+                .with_column(
+                    (when(col("amount").lt(lit(0)))
+                        .then(col(neg))
+                        .otherwise(col(pos)))
+                    .alias("partner"),
+                )
+                .collect()
+                .map_err(|e| {
+                    PolarsError::ComputeError(
+                        format!(
+                            "Could not set partner column negative: '{neg}' and positive: '{pos}', due to {e}"
+                        )
+                        .into(),
+                    )
+                })?;
+        }
+        Ok(df)
+    }
+
+    fn convert_amount(&self, mut df: DataFrame) -> Result<DataFrame, PolarsError> {
+        if df.column("amount")?.dtype() == &DataType::String {
+            df.with_column(
+                df.column("amount")?
+                    .str()?
+                    .replace_all(r"\.", "")?
+                    .replace_all(r",", ".")?
+                    .cast(&DataType::Float64)?
+                    .fill_null(FillNullStrategy::Zero)?,
+            )?;
+        }
+        df = df
+            .lazy()
+            .with_column(col("amount").cast(DataType::Float64))
+            .collect()?;
+        Ok(df)
     }
 }
 // class Parser:
