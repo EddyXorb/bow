@@ -321,6 +321,40 @@ read_csv:
         assert!(columns.contains(&"desc"));
         assert!(columns.contains(&"partner_iban"));
     }
+
+    #[test]
+    fn test_semicolon_separator() {
+        let yml = r#"
+read_csv:
+    separator: ";"
+        "#;
+
+        let config = serde_yml::from_str(yml).unwrap();
+        let parser = BowParser::new(config, vec![]);
+        let csv = get_test_data_folder().join("test_input_separator.csv");
+        let df = parser.read_csv(&csv).unwrap();
+        assert_eq!(df.get_column_names_str(), vec!["col1", "col2"]);
+    }
+
+    #[test]
+    fn test_decimal_comma() {
+        let yml = r#"
+read_csv:
+    separator: ";"
+    decimal_comma: true
+        "#;
+
+        let config = serde_yml::from_str(yml).unwrap();
+        let parser = BowParser::new(config, vec![]);
+        let csv = get_test_data_folder().join("test_input_decimal_comma.csv");
+        let df = parser.read_csv(&csv).unwrap();
+        let col = df.column("col1").unwrap();
+        assert_eq!(col.get(0).unwrap(), polars::prelude::AnyValue::Float64(1.5));
+        assert_eq!(
+            col.get(1).unwrap(),
+            polars::prelude::AnyValue::Float64(-1.5)
+        );
+    }
 }
 
 // class Parser:
