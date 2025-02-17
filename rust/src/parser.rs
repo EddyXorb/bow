@@ -298,25 +298,29 @@ read_csv:
         test_skip_yml(3);
     }
 
-    //     #[test]
-    //     fn test_rename() {
-    //         let yml = r#"
-    // rename:
-    //     date: "Buchungsdatum"
-    //     classification: "Umsatztyp"
-    //     amount: "Betrag (€)"
-    //     desc: "Verwendungszweck"
-    //     partner_iban: "IBAN"
-    //         "#;
+    #[test]
+    fn test_rename() {
+        let yml = r#"
+    rename:
+        date: "Buchungsdatum"
+        classification: "Umsatztyp"
+        amount: "Betrag (€)"
+        desc: "Verwendungszweck"
+        partner_iban: "IBAN"
+            "#;
 
-    //         let config = serde_yml::from_str(yml).unwrap();
-    //         let parser = BowParser::new(config, vec![]);
-    //         let csv = get_test_data_folder().join("test_input_rename.csv");
-    //         let mut df = parser.read_csv(&csv).unwrap();
-    //         df = parser.rename_df(df, &csv).unwrap();
-    //         let columns = df.get_column_names();
-    //         columns.contains(x)
-    //     }
+        let config = serde_yml::from_str(yml).unwrap();
+        let parser = BowParser::new(config, vec![]);
+        let csv = get_test_data_folder().join("test_input_rename.csv");
+        let mut df = parser.read_csv(&csv).unwrap();
+        df = parser.rename_df(df, &csv).unwrap();
+        let columns = df.get_column_names_str();
+        assert!(columns.contains(&"date"));
+        assert!(columns.contains(&"classification"));
+        assert!(columns.contains(&"amount"));
+        assert!(columns.contains(&"desc"));
+        assert!(columns.contains(&"partner_iban"));
+    }
 }
 
 // class Parser:
