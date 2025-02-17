@@ -228,6 +228,7 @@ impl BowParser {
 
     fn convert_amount(&self, mut df: DataFrame) -> Result<DataFrame, PolarsError> {
         if df.column("amount")?.dtype() == &DataType::String {
+            // remove thousand separator which is a dot; but only if it is a string (which means it could not be interpreted as float before)
             df.with_column(
                 df.column("amount")?
                     .str()?
@@ -355,8 +356,73 @@ read_csv:
             polars::prelude::AnyValue::Float64(-1.5)
         );
     }
-}
 
+    #[test]
+    fn test_null_values() {
+        let yml = r#"
+read_csv:
+    null_values: ["I_AM_NULL", "null","None"]
+        "#;
+
+        let config = serde_yml::from_str(yml).unwrap();
+        let parser = BowParser::new(config, vec![]);
+        let csv = get_test_data_folder().join("test_input_null_values.csv");
+        let df = parser.read_csv(&csv).unwrap();
+        let col = df.column("col").unwrap();
+        assert_eq!(col.get(0).unwrap(), polars::prelude::AnyValue::Null);
+        assert_eq!(col.get(1).unwrap(), polars::prelude::AnyValue::Null);
+        assert_eq!(col.get(2).unwrap(), polars::prelude::AnyValue::Null);
+        assert_ne!(col.get(3).unwrap(), polars::prelude::AnyValue::Null);
+    }
+
+    #[test]
+    fn test_try_parse_dates() {
+        let yml = r#"
+read_csv:
+        try_parse_dates: true
+        "#;
+
+        let config = serde_yml::from_str(yml).unwrap();
+        let parser = BowParser::new(config, vec![]);
+        let csv = get_test_data_folder().join("test_input_try_parse_dates.csv");
+        let df = parser.read_csv(&csv).unwrap();
+
+        let col = df.column("date").unwrap();
+        assert_eq!(col.get(0).unwrap(), polars::prelude::AnyValue::Date(0));
+    }
+
+    #[test]
+    fn test_thousands_separator_removed() {
+        let yml = r#""#;
+        let config = serde_yml::from_str(yml).unwrap();
+        let parser = BowParser::new(config, vec![]);
+        let csv = get_test_data_folder().join("test_input_thousands_separator.csv");
+        let mut df = parser.read_csv(&csv).unwrap();
+        df = parser.convert_amount(df).unwrap();
+
+        let col = df.column("amount").unwrap();
+        assert_eq!(
+            col.get(0).unwrap(),
+            polars::prelude::AnyValue::Float64(1333333.5)
+        );
+    }
+
+    #[test]
+    fn test_date_format() {
+        let yml = r#"
+date_format: "%d:%m:%Y"
+        "#;
+        let config = serde_yml::from_str(yml).unwrap();
+        print!("here");
+        let parser = BowParser::new(config, vec![]);
+        let csv = get_test_data_folder().join("test_input_parse_custom_date.csv");
+        let mut df = parser.read_csv(&csv).unwrap();
+        df = parser.convert_date_column(df, &csv).unwrap();
+
+        let col = df.column("date").unwrap();
+        assert_eq!(col.get(0).unwrap(), polars::prelude::AnyValue::Date(0));
+    }
+}
 // class Parser:
 //     def __init__(
 //         self,
