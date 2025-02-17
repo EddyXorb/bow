@@ -422,6 +422,73 @@ date_format: "%d:%m:%Y"
         let col = df.column("date").unwrap();
         assert_eq!(col.get(0).unwrap(), polars::prelude::AnyValue::Date(0));
     }
+
+    #[test]
+    fn test_account_name_fixed() {
+        let yml = r#"
+account_settings:
+    account_name: "MyAccount"
+"#;
+        let config = serde_yml::from_str(yml).unwrap();
+        let parser = BowParser::new(config, vec![]);
+        let csv = get_test_data_folder().join("test_input_account.csv");
+        let mut df = parser.read_csv(&csv).unwrap();
+        df = parser.apply_account_settings(df, &csv).unwrap();
+
+        let col = df.column("account").unwrap();
+        assert_eq!(
+            col.get(0).unwrap(),
+            polars::prelude::AnyValue::String("MyAccount")
+        );
+    }
+
+    #[test]
+    fn test_account_name_from_file_name() {
+        let yml = r#"
+account_settings:
+    account_name_is_file_name: true
+"#;
+        let config = serde_yml::from_str(yml).unwrap();
+        let parser = BowParser::new(config, vec![]);
+        let csv = get_test_data_folder().join("test_input_account.csv");
+        let mut df = parser.read_csv(&csv).unwrap();
+        df = parser.apply_account_settings(df, &csv).unwrap();
+
+        let col = df.column("account").unwrap();
+        assert_eq!(
+            col.get(0).unwrap(),
+            polars::prelude::AnyValue::String("test_input_account")
+        );
+    }
+
+    #[test]
+    fn test_account_name_aliases() {
+        let yml = r#"
+account_settings:
+    account_aliases:
+        "please_rename_me": "bank_account"
+        "rename_me_too": "bank_account_2"
+"#;
+        let config = serde_yml::from_str(yml).unwrap();
+        let parser = BowParser::new(config, vec![]);
+        let csv = get_test_data_folder().join("test_input_account.csv");
+        let mut df = parser.read_csv(&csv).unwrap();
+        df = parser.apply_account_settings(df, &csv).unwrap();
+
+        let col = df.column("account").unwrap();
+        assert_eq!(
+            col.get(0).unwrap(),
+            polars::prelude::AnyValue::String("bank_account")
+        );
+        assert_eq!(
+            col.get(1).unwrap(),
+            polars::prelude::AnyValue::String("do_not_rename_me")
+        );
+        assert_eq!(
+            col.get(2).unwrap(),
+            polars::prelude::AnyValue::String("bank_account_2")
+        );
+    }
 }
 // class Parser:
 //     def __init__(
