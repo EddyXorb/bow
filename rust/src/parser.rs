@@ -489,6 +489,31 @@ account_settings:
             polars::prelude::AnyValue::String("bank_account_2")
         );
     }
+
+    #[test]
+    fn test_partner_settings() {
+        let yml = r#"
+partner_settings:
+  partner_column_if_amount_negative: "receiver"
+  partner_column_if_amount_positive: "payer"
+"#;
+
+        let config = serde_yml::from_str(yml).unwrap();
+        let parser = BowParser::new(config, vec![]);
+        let csv = get_test_data_folder().join("test_input_partner_settings.csv");
+        let mut df = parser.read_csv(&csv).unwrap();
+        df = parser.apply_partner_settings(df).unwrap();
+
+        let col = df.column("partner").unwrap();
+        assert_eq!(
+            col.get(0).unwrap(),
+            polars::prelude::AnyValue::String("receiver1")
+        );
+        assert_eq!(
+            col.get(1).unwrap(),
+            polars::prelude::AnyValue::String("payer2")
+        );
+    }
 }
 // class Parser:
 //     def __init__(
