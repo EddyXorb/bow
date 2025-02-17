@@ -1,0 +1,18 @@
+read_csv:
+  separator: ";"
+  decimal_comma: True
+  skip_rows: 4
+rename:
+  date: "Buchungsdatum"
+  classification: "Umsatztyp"
+  amount: "Betrag (€)"
+  desc: "Verwendungszweck"
+  partner_iban: "IBAN"
+date_format: "%d.%m.%y"
+account_settings:
+  account_name: "DKB"
+partner_settings:
+  partner_column_if_amount_negative: "Zahlungsempfänger*in"
+  partner_column_if_amount_positive: "Zahlungspflichtige*r"
+row_filter:
+  date_begin: 2022-01-01

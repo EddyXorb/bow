@@ -3,12 +3,9 @@ use log::{info, warn};
 use polars::error::{PolarsError, PolarsResult};
 use polars::frame::DataFrame;
 use polars::prelude::{
-    CsvParseOptions, CsvReadOptions, CsvReader, Literal, NullValues, PlSmallStr, SerReader,
-    StringMethods,
+    concat, CsvParseOptions, CsvReadOptions, NullValues, PlSmallStr, SerReader, StringMethods,
 };
-use serde_yml::Number;
 use std::collections::HashMap;
-use std::fs::read;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use walkdir::WalkDir;
@@ -18,15 +15,25 @@ use polars::prelude::*;
 const PARSER_CONFIG_FILE_NAME: &str = "parser_config.yml";
 const EXPECTED_BOW_COLUMNS: [&str; 5] = ["date", "amount", "partner", "account", "partner_iban"];
 
-pub struct BowParser<'a> {
-    folder: &'a Path,
+pub struct BowParser {
     parse_config: HashMap<String, serde_yml::Value>,
     expected_out_columns: [&'static str; 5],
     banking_input_csvs: Vec<PathBuf>,
 }
 
-impl<'a> BowParser<'a> {
-    pub fn new(folder: &'a Path) -> Self {
+impl BowParser {
+    pub fn new(
+        parse_config: HashMap<String, serde_yml::Value>,
+        banking_input_csvs: Vec<PathBuf>,
+    ) -> BowParser {
+        Self {
+            parse_config,
+            expected_out_columns: EXPECTED_BOW_COLUMNS,
+            banking_input_csvs,
+        }
+    }
+
+    pub fn from_folder(folder: &Path) -> Self {
         let parse_config_yaml = read_yaml_file(&folder.join(PARSER_CONFIG_FILE_NAME));
 
         let mut banking_input_csvs = Vec::new();
@@ -43,7 +50,7 @@ impl<'a> BowParser<'a> {
                 .and_then(|f| f.to_str())
                 .unwrap_or("unknown");
 
-            info!(
+            print!(
                 "Found banking csv '{}' in folder '{}'",
                 entry.file_name().unwrap().to_str().unwrap(),
                 parent_folder,
@@ -52,34 +59,31 @@ impl<'a> BowParser<'a> {
         }
 
         Self {
-            folder,
             parse_config: parse_config_yaml.unwrap_or(HashMap::new()),
-            expected_out_columns: ["date", "amount", "partner", "account", "partner_iban"],
+            expected_out_columns: EXPECTED_BOW_COLUMNS,
             banking_input_csvs,
         }
     }
 
     pub fn parse(&self) -> Result<DataFrame, PolarsError> {
+        let mut dfs: Vec<LazyFrame> = Vec::new();
         for csv in &self.banking_input_csvs {
-            let read_options = self.get_csv_read_options();
-            let mut df: DataFrame = read_options
-                .try_into_reader_with_file_path(Some(csv.clone()))?
-                .finish()?;
-
+            let mut df = self.read_csv(csv)?;
             df = self.rename_df(df, &csv)?;
             df = self.convert_amount(df)?;
             df = self.convert_date_column(df, &csv)?;
             df = self.apply_account_settings(df, &csv)?;
             df = self.apply_partner_settings(df)?;
-
             df = df.select(self.expected_out_columns)?;
-
-            info!("{csv:?}\n: {:?}", df);
+            dfs.push(df.lazy());
         }
 
+        let df = concat(dfs, UnionArgs::default())?.collect()?;
+
+        Ok(df)
+        // TODO
         // row_filter:
         //   date_begin: 2022-01-01
-        DataFrame::new(vec![])
     }
 
     fn apply_account_settings(
@@ -233,13 +237,88 @@ impl<'a> BowParser<'a> {
                     .fill_null(FillNullStrategy::Zero)?,
             )?;
         }
-        df = df
-            .lazy()
-            .with_column(col("amount").cast(DataType::Float64))
-            .collect()?;
+        df.with_column(df.column("amount")?.cast(&DataType::Float64)?)?;
+        Ok(df)
+    }
+
+    fn read_csv(&self, csv: &PathBuf) -> PolarsResult<DataFrame> {
+        let read_options = self.get_csv_read_options();
+        let df: DataFrame = read_options
+            .try_into_reader_with_file_path(Some(csv.clone()))?
+            .finish()?;
         Ok(df)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parser_dkb_works() {
+        let folder = get_test_data_folder().join("dkb_test");
+        let parser = BowParser::from_folder(folder.as_path());
+        let df = parser.parse().unwrap();
+        assert_eq!(df.get_column_names(), EXPECTED_BOW_COLUMNS);
+    }
+
+    fn get_test_data_folder() -> PathBuf {
+        let folder = PathBuf::from(file!())
+            .ancestors()
+            .nth(1)
+            .unwrap()
+            .join("test_data");
+        folder
+    }
+
+    fn test_skip_yml(skip: i32) {
+        let yml = format!(
+            r#"
+read_csv:
+    skip_rows: {skip}
+        "#
+        );
+        let config = serde_yml::from_str(yml.as_str()).unwrap();
+        let parser = BowParser::new(config, vec![]);
+        let csv = get_test_data_folder().join("test_input_with_dummylines.csv");
+
+        let df = parser.read_csv(&csv).unwrap();
+        let skip_plus_one = skip + 1;
+        assert_eq!(
+            df.get_column_names(),
+            vec![format!("Dummyline {skip_plus_one};").as_str()]
+        );
+    }
+
+    #[test]
+    fn test_parser_read_csv_skip_rows() {
+        test_skip_yml(0);
+        test_skip_yml(1);
+        test_skip_yml(2);
+        test_skip_yml(3);
+    }
+
+    //     #[test]
+    //     fn test_rename() {
+    //         let yml = r#"
+    // rename:
+    //     date: "Buchungsdatum"
+    //     classification: "Umsatztyp"
+    //     amount: "Betrag (€)"
+    //     desc: "Verwendungszweck"
+    //     partner_iban: "IBAN"
+    //         "#;
+
+    //         let config = serde_yml::from_str(yml).unwrap();
+    //         let parser = BowParser::new(config, vec![]);
+    //         let csv = get_test_data_folder().join("test_input_rename.csv");
+    //         let mut df = parser.read_csv(&csv).unwrap();
+    //         df = parser.rename_df(df, &csv).unwrap();
+    //         let columns = df.get_column_names();
+    //         columns.contains(x)
+    //     }
+}
+
 // class Parser:
 //     def __init__(
 //         self,

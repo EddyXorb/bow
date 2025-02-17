@@ -4,11 +4,11 @@ mod util;
 // src/main.rs
 use clap::Parser;
 use flexi_logger;
-use log::{debug, error, info, Record};
+use log::{error, info, Record};
 use std::collections::HashMap;
 use std::fs;
 use std::io::Write;
-use std::path::{absolute, PathBuf};
+use std::path::PathBuf;
 use util::read_yaml_file;
 /// Search for a pattern in a file and display the lines that contain it.
 #[derive(Parser)]
@@ -80,9 +80,8 @@ impl Main {
             .map(|x| x.unwrap().path())
         {
             info!("{:?}", bankfolder);
-            let parser = parser::BowParser::new(&bankfolder);
-            match parser.parse()
-            {
+            let parser = parser::BowParser::from_folder(&bankfolder);
+            match parser.parse() {
                 Ok(_) => info!("Parsing successful"),
                 Err(e) => error!("Parsing failed: {e}"),
             }
