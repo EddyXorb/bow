@@ -67,6 +67,10 @@ impl BowParser {
 
     pub fn parse(&self) -> Result<DataFrame, PolarsError> {
         let mut dfs: Vec<LazyFrame> = Vec::new();
+
+        let mut overall_min_date = std::i32::MAX;
+        let mut overall_max_date = std::i32::MIN;
+
         for csv in &self.banking_input_csvs {
             let mut df = self.read_csv(csv)?;
             df = self.rename_df(df, &csv)?;
@@ -75,6 +79,28 @@ impl BowParser {
             df = self.apply_account_settings(df, &csv)?;
             df = self.apply_partner_settings(df)?;
             df = df.select(self.expected_out_columns)?;
+
+            
+            if df.shape().0 > 0 {
+                if let Some(date_series) = df.column("date").ok() {
+                    if let AnyValue::Date(first_date) = date_series.min_reduce().unwrap().value() {
+                        if first_date < &overall_min_date {
+                            overall_min_date = *first_date;
+                        }
+                    }
+
+                    if let AnyValue::Date(last_date) = date_series.max_reduce().unwrap().value() {
+                        if last_date > &overall_max_date {
+                            overall_max_date = *last_date;
+                        }
+                    }
+                }
+            }
+            print!(
+                "overall_min_date: {:?}, overall_max_date: {:?}",
+                overall_min_date, overall_max_date
+            );
+
             dfs.push(df.lazy());
         }
 

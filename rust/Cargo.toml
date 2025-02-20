@@ -10,6 +10,7 @@ polars = { version = "0.46.0", features = [
     "serde",
     "strings",
     "regex",
+    "dtype-date",
 ] }
 serde = "1.0.217"
 serde_yml = "0.0.12"
