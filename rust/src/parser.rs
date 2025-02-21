@@ -68,9 +68,6 @@ impl BowParser {
     pub fn parse(&self) -> Result<DataFrame, PolarsError> {
         let mut dfs: Vec<LazyFrame> = Vec::new();
 
-        let mut overall_min_date = std::i32::MAX;
-        let mut overall_max_date = std::i32::MIN;
-
         for csv in &self.banking_input_csvs {
             let mut df = self.read_csv(csv)?;
             df = self.rename_df(df, &csv)?;
@@ -78,35 +75,15 @@ impl BowParser {
             df = self.convert_date_column(df, &csv)?;
             df = self.apply_account_settings(df, &csv)?;
             df = self.apply_partner_settings(df)?;
+
             df = df.select(self.expected_out_columns)?;
-
-            
-            if df.shape().0 > 0 {
-                if let Some(date_series) = df.column("date").ok() {
-                    if let AnyValue::Date(first_date) = date_series.min_reduce().unwrap().value() {
-                        if first_date < &overall_min_date {
-                            overall_min_date = *first_date;
-                        }
-                    }
-
-                    if let AnyValue::Date(last_date) = date_series.max_reduce().unwrap().value() {
-                        if last_date > &overall_max_date {
-                            overall_max_date = *last_date;
-                        }
-                    }
-                }
-            }
-            print!(
-                "overall_min_date: {:?}, overall_max_date: {:?}",
-                overall_min_date, overall_max_date
-            );
 
             dfs.push(df.lazy());
         }
 
-        let df = concat(dfs, UnionArgs::default())?.collect()?;
+        let final_df = Self::concat_dfs_uniquely(dfs)?;
 
-        Ok(df)
+        Ok(final_df)
         // TODO
         // row_filter:
         //   date_begin: 2022-01-01
@@ -274,6 +251,37 @@ impl BowParser {
             .try_into_reader_with_file_path(Some(csv.clone()))?
             .finish()?;
         Ok(df)
+    }
+
+    /// Combines all dataframes by removing duplicates, but only duplicates between different files.
+    /// Why is no simple unique on the result used?
+    /// Because it can happen that two transactions occur on the same day with the same amount, partner and so on.
+    /// In this case, the transactions are not unique and should not be removed.
+    /// But, we assume that transactions between different files that are identical, are duplicates and should be removed.
+    fn concat_dfs_uniquely(mut dfs: Vec<LazyFrame>) -> Result<DataFrame, PolarsError> {
+        if dfs.is_empty() {
+            return Err(PolarsError::NoData("No CSV files found.".into()));
+        }
+        let mut final_df = dfs.pop().unwrap();
+        let columns: Vec<Expr> = final_df
+            .clone()
+            .collect()?
+            .get_column_names_str()
+            .iter()
+            .map(|x| col(x.to_string()))
+            .collect();
+
+        for df in dfs {
+            let df_unique = df
+                .join_builder()
+                .with(final_df.clone())
+                .left_on(columns.clone())
+                .right_on(columns.clone())
+                .how(JoinType::Anti)
+                .finish();
+            final_df = concat([final_df, df_unique], UnionArgs::default())?;
+        }
+        Ok(final_df.collect()?)
     }
 }
 
@@ -538,6 +546,18 @@ partner_settings:
         assert_eq!(
             col.get(1).unwrap(),
             polars::prelude::AnyValue::String("payer2")
+        );
+    }
+
+    #[test]
+    fn test_unique_concat_result_dataframes() {
+        let df1 = DataFrame::new(vec![Column::new("c".into(), &["a", "a", "c"])]).unwrap();
+        let df2 = DataFrame::new(vec![Column::new("c".into(), &["a", "a", "b", "c"])]).unwrap();
+
+        let result = BowParser::concat_dfs_uniquely(vec![df1.lazy(), df2.lazy()]).unwrap();
+        assert_eq!(
+            result.column("c").unwrap(),
+            &Column::new("c".into(), &["a", "a", "b", "c"])
         );
     }
 }
