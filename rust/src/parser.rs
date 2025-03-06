@@ -1,4 +1,5 @@
 use crate::util::read_yaml_file;
+use chrono::NaiveDate;
 use log::{info, warn};
 use polars::error::{PolarsError, PolarsResult};
 use polars::frame::DataFrame;
@@ -75,6 +76,7 @@ impl BowParser {
             df = self.convert_date_column(df, &csv)?;
             df = self.apply_account_settings(df, &csv)?;
             df = self.apply_partner_settings(df)?;
+            df = self.apply_row_filter(df)?;
 
             df = df.select(self.expected_out_columns)?;
 
@@ -84,9 +86,29 @@ impl BowParser {
         let final_df = Self::concat_dfs_uniquely(dfs)?;
 
         Ok(final_df)
-        // TODO
-        // row_filter:
-        //   date_begin: 2022-01-01
+    }
+
+    fn apply_row_filter(&self, mut df: DataFrame) -> Result<DataFrame, PolarsError> {
+        if let Some(row_filter) = self.parse_config.get("row_filter") {
+            if let Some(date_begin) = row_filter
+                .get("date_begin")
+                .and_then(|x| x.as_str())
+                .and_then(|x| NaiveDate::parse_from_str(x, "%Y-%m-%d").ok())
+            {
+                df = df
+                    .lazy()
+                    .filter(col("date").gt_eq(lit(date_begin)))
+                    .collect()?;
+            }
+            if let Some(date_end) = row_filter
+                .get("date_end")
+                .and_then(|x| x.as_str())
+                .and_then(|x| NaiveDate::parse_from_str(x, "%Y-%m-%d").ok())
+            {
+                df = df.lazy().filter(col("date").lt(lit(date_end))).collect()?;
+            }
+        }
+        Ok(df)
     }
 
     fn apply_account_settings(
@@ -258,6 +280,7 @@ impl BowParser {
     /// Because it can happen that two transactions occur on the same day with the same amount, partner and so on.
     /// In this case, the transactions are not unique and should not be removed.
     /// But, we assume that transactions between different files that are identical, are duplicates and should be removed.
+    /// If there are multiple duplicates in multiple files that are as well duplicated across these files, it is undefined how many of these duplicates are kept.
     fn concat_dfs_uniquely(mut dfs: Vec<LazyFrame>) -> Result<DataFrame, PolarsError> {
         if dfs.is_empty() {
             return Err(PolarsError::NoData("No CSV files found.".into()));
@@ -560,163 +583,46 @@ partner_settings:
             &Column::new("c".into(), &["a", "a", "b", "c"])
         );
     }
+
+    #[test]
+    fn test_filter_rows_date_begin() {
+        let yml = r#"
+read_csv:
+        try_parse_dates: true
+row_filter:
+    date_begin: 1970-01-02
+        "#;
+
+        let config = serde_yml::from_str(yml).unwrap();
+        let parser = BowParser::new(config, vec![]);
+        let csv = get_test_data_folder().join("test_input_row_filter.csv");
+        let mut df = parser.read_csv(&csv).unwrap();
+        df = parser.apply_row_filter(df).unwrap();
+        assert_eq!(df.column("date").unwrap().len(), 2);
+        assert_eq!(
+            df.column("date").unwrap().get(0).unwrap(),
+            polars::prelude::AnyValue::Date(1) // 1970-01-02
+        );
+    }
+
+    #[test]
+    fn test_filter_rows_date_end() {
+        let yml = r#"
+read_csv:
+        try_parse_dates: true
+row_filter:
+    date_end: 1970-01-02
+        "#;
+
+        let config = serde_yml::from_str(yml).unwrap();
+        let parser = BowParser::new(config, vec![]);
+        let csv = get_test_data_folder().join("test_input_row_filter.csv");
+        let mut df = parser.read_csv(&csv).unwrap();
+        df = parser.apply_row_filter(df).unwrap();
+        assert_eq!(df.column("date").unwrap().len(), 1);
+        assert_eq!(
+            df.column("date").unwrap().get(0).unwrap(),
+            polars::prelude::AnyValue::Date(0) // 1970-01-01
+        );
+    }
 }
-// class Parser:
-//     def __init__(
-//         self,
-//         folder: Path,
-//         expected_out_columns=bank_transaction_columns,
-//     ):
-//         self.folder = folder
-//         self.expected_out_columns = expected_out_columns
-
-//     def parse(self) -> pl.DataFrame | None:
-//         files = list(self.folder.glob("*.csv"))
-//         if len(files) == 0:
-//             raise FileNotFoundError(f"No files found in {self.folder}")
-
-//         account_to_timeranges_already_parsed: defaultdict[
-//             str, list[(datetime, datetime)]
-//         ] = defaultdict(list)
-
-//         dfs = []
-//         for file in files:
-//             print(f"    Parsing {file.relative_to(self.folder.parent.parent)}..")
-//             df = self.parse_single_file(file)
-//             assert df.columns == self.expected_out_columns
-//             for account, timeranges in account_to_timeranges_already_parsed.items():
-//                 for start, end in timeranges:
-//                     df = df.filter(
-//                         (pl.col("account") != account)
-//                         | (pl.col("date") < start)
-//                         | (pl.col("date") > end)
-//                     )
-//             timeframe_parsed = df.group_by("account").agg(
-//                 min_time=pl.min("date"), max_time=pl.max("date")
-//             )
-//             for row in timeframe_parsed.iter_rows(named=True):
-//                 account = row["account"]
-//                 min_time = row["min_time"]
-//                 max_time = row["max_time"]
-//                 account_to_timeranges_already_parsed[account].append(
-//                     (min_time, max_time)
-//                 )
-
-//             dfs.append(df)
-
-//         df = pl.concat(dfs)
-
-//         if "partner_iban" in df.columns:
-//             df = df.with_columns(
-//                 partner_iban=pl.when(pl.col("partner_iban").is_not_null())
-//                 .then(pl.col("partner_iban").cast(pl.String).str.replace_all(" ", ""))
-//                 .otherwise(pl.col("partner_iban"))
-//             )
-//         df = df.select(self.expected_out_columns)
-//         return df
-
-//     def parse_single_file(self, file: Path) -> pl.DataFrame:
-//         raise NotImplementedError()
-
-// class ConfigFileBasedParser(Parser):
-//     def __init__(self, folder: Path):
-//         super().__init__(folder)
-
-//         self.parse_config_file = folder / "parser_config.yml"
-//         if not self.parse_config_file.exists():
-//             raise FileNotFoundError(f"No config file found in {folder}")
-
-//         with open(self.parse_config_file, encoding="UTF-8") as file:
-//             self.config: dict[str, str] = yaml.load(file, Loader=yaml.FullLoader)
-
-//         if "expected_out_columns" in self.config:
-//             self.expected_out_columns = self.config["expected_out_columns"]
-
-//     def parse_single_file(self, file: Path) -> pl.DataFrame:
-//         df = pl.read_csv(file, **self.config.get("read_csv", {}))
-
-//         if self.config.get("pre_rename", {}).get("lower_columns", False):
-//             df = df.rename({col: col.lower() for col in df.columns})
-//         if self.config.get("pre_rename", {}).get("strip_spaces", False):
-//             df = df.rename({col: col.replace(" ", "") for col in df.columns})
-
-//         rename_dict = {
-//             value: key for key, value in self.config.get("rename", {}).items()
-//         }
-
-//         df: pl.DataFrame = df.rename(rename_dict)
-//         if "amount" in df.columns:
-//             if df.dtypes[df.columns.index("amount")] == pl.String:
-//                 df = df.with_columns(
-//                     pl.col("amount")
-//                     .cast(pl.String)
-//                     .str.replace(r"\.", "")
-//                     .str.replace(r",", ".")
-//                     .fill_null(0)
-//                     .cast(pl.Float64)
-//                 )
-//             df = df.with_columns(amount=pl.col("amount").cast(pl.Float64))
-
-//         if "date_format" in self.config:
-//             df = df.with_columns(
-//                 date=pl.col("date")
-//                 .str.to_datetime(self.config["date_format"])
-//                 .cast(pl.Date)
-//             )
-
-//         if partner_settings := self.config.get("partner_settings", None):
-//             if (
-//                 "amount" in df.columns
-//                 and "partner_column_if_amount_negative" in partner_settings
-//                 and "partner_column_if_amount_positive" in partner_settings
-//             ):
-//                 when_condition = pl.col("amount") < 0
-//                 if partner_settings.get("use_other_column_if_partner_empty", False):
-//                     when_condition = (
-//                         when_condition
-//                         & pl.col(
-//                             partner_settings["partner_column_if_amount_negative"]
-//                         ).is_not_null()
-//                     ) | (
-//                         pl.col(
-//                             partner_settings["partner_column_if_amount_positive"]
-//                         ).is_null()
-//                     )
-
-//                 df = df.with_columns(
-//                     partner=pl.when(when_condition)
-//                     .then(pl.col(partner_settings["partner_column_if_amount_negative"]))
-//                     .otherwise(
-//                         pl.col(partner_settings["partner_column_if_amount_positive"])
-//                     )
-//                 )
-
-//         if account_settings := self.config.get("account_settings", None):
-//             if "account_name" in account_settings:
-//                 df = df.with_columns(
-//                     account=pl.lit(self.config["account_settings"]["account_name"])
-//                 )
-//             elif account_settings.get("account_name_is_file_name", False):
-//                 df = df.with_columns(account=pl.lit(file.stem))
-
-//             if "account_aliases" in account_settings:
-//                 df = df.with_columns(
-//                     account=pl.col("account").replace(
-//                         account_settings["account_aliases"]
-//                     )
-//                 )
-
-//         for col in self.expected_out_columns:
-//             if col not in df.columns:
-//                 df = df.with_columns(pl.lit(None).alias(col))
-
-//         if row_filter := self.config.get("row_filter", None):
-//             if "date_begin" in row_filter:
-//                 df = df.filter(pl.col("date") >= row_filter["date_begin"])
-//             if "date_end" in row_filter:
-//                 df = df.filter(pl.col("date") < row_filter["date_end"])
-
-//         df = df.filter(pl.col("account").is_not_null()).select(
-//             self.expected_out_columns
-//         )
-//         return df
